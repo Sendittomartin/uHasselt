@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MS Teams & SharePoint – Sharing Use Cases Guidance Portal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F6FB;min-height:100vh}
+input,button{font-family:'Segoe UI',Arial,sans-serif}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#F1F5F9}
+::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+ol{padding-left:18px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo}=React;
+const ACCENT="#0078D4",DARK="#0F3460",SUCCESS="#107C10",WARN="#D83B01",CARD="#FFFFFF";
+const AUDIENCE_COLORS={"IT Admin":"#0078D4","Team Owner":"#107C10","End User":"#8764B8"};
+
+const useCases=[
+  {
+    id:1,title:"Share a Folder — Internal Users — Edit but No Delete",
+    subtitle:"Prevent file & folder deletion while allowing full editing",
+    audience:["IT Admin","Team Owner"],product:["Teams","SharePoint"],
+    feasibility:"Yes",icon:"📁",color:"#0078D4",
+    description:"Using a custom SharePoint permission level ('Contribute without Delete'), a specific folder in the Teams-connected SharePoint document library is configured with broken inheritance and that custom permission applied to the target users. This prevents deletion of files AND the folder itself while allowing full editing.",
+    solution:[
+      "Teams files are stored in the connected SharePoint site. No native Teams UI supports 'edit-but-no-delete' — the solution is applied entirely in SharePoint.",
+      "Create a custom permission level 'Contribute without Delete' at site-collection level (copy of Contribute, minus Delete Items and Delete Versions).",
+      "Navigate to the specific folder in SharePoint → break permission inheritance → remove the default Members group → assign the custom permission level to the required internal users or a dedicated security group.",
+      "Removing 'Delete Items' ensures the folder itself cannot be renamed or deleted by users holding this permission level.",
+      "Site Owners retain full control — restrict that group to admins only.",
+      "Users access content via the Teams Files tab or SharePoint — the experience is seamless in both."
+    ],
+    bestPractice:{
+      compliant:true,
+      summary:"This use case is fully aligned with best practices when implemented correctly.",
+      points:[
+        "Create a dedicated Entra ID security group (e.g. 'FolderEditors_NoDelete') and assign the custom permission level to the group — never to individual users.",
+        "Break inheritance at folder level only — avoid breaking it at individual file level to prevent a governance nightmare.",
+        "Regularly audit permissions via SharePoint Admin Center or PowerShell.",
+        "Document the permission structure in your governance register.",
+        "Ensure Site Owners / Full Control holders are limited to a small admin group."
+      ],
+      violations:[]
+    },
+    configuration:[
+      {step:1,title:"Create the Custom Permission Level",admin:true,items:[
+        "Open the SharePoint site connected to the Team.",
+        "Go to Settings (gear) → Site Settings → Users and Permissions → Site Permissions.",
+        "Click 'Permission Levels' in the ribbon.",
+        "Click 'Contribute' to open it → scroll to bottom → click 'Copy Permission Level'.",
+        "Name: Contribute without Delete.",
+        "Uncheck: Delete Items ✗ and Delete Versions ✗.",
+        "Click 'Create'."
+      ]},
+      {step:2,title:"Create a Security Group (Recommended)",admin:true,items:[
+        "In Microsoft Entra ID or M365 Admin Center, create a new Security Group.",
+        "Suggested name: FolderEditors_NoDelete (or relevant project name).",
+        "Add all required internal users to this group.",
+        "This ensures permission management is centralised and auditable."
+      ]},
+      {step:3,title:"Break Inheritance on the Target Folder",admin:false,items:[
+        "In Teams → Files tab → hover over the folder → click '…' → Open in SharePoint.",
+        "Select the folder → click '…' → Details → Manage Access → Advanced.",
+        "In the ribbon, click 'Stop Inheriting Permissions' → confirm OK.",
+        "Remove the default Members group from the folder permissions (select → Remove User Permissions)."
+      ]},
+      {step:4,title:"Assign the Custom Permission to the Folder",admin:false,items:[
+        "On the folder's unique permissions page, click 'Grant Permissions'.",
+        "Enter the security group name (e.g. FolderEditors_NoDelete).",
+        "Click 'Show Options' → select 'Contribute without Delete' from the dropdown.",
+        "Uncheck 'Send Email' if notification is not required.",
+        "Click Share / OK."
+      ]},
+      {step:5,title:"Verify the Configuration",admin:false,items:[
+        "Log in as a test user member of the security group.",
+        "Confirm that file editing (open, modify, save) works correctly.",
+        "Confirm that attempting to delete a file returns a 'permission denied' error.",
+        "Confirm that the folder itself cannot be renamed or deleted.",
+        "Document the test result and date."
+      ]}
+    ],
+    prerequisites:[
+      "SharePoint Administrator or Site Collection Administrator role on the target site.",
+      "Permission to create Security Groups in Microsoft Entra ID (or coordinate with Entra admin).",
+      "Teams Admin Center access is NOT required for this configuration.",
+      "The site must not have the 'Limited-access user permission lockdown mode' site feature enabled."
+    ],
+    notice:null
+  },
+  {
+    id:2,title:"Share a Single File with External Users — No Entra ID Account",
+    subtitle:"Share a Teams file with external users who have no Microsoft / Entra account",
+    audience:["IT Admin","Team Owner","End User"],product:["Teams","SharePoint"],
+    feasibility:"Yes*",icon:"📄",color:"#107C10",
+    description:"A single file stored in a Teams channel (SharePoint document library) can be shared with external users who have no Entra ID account via two methods: (A) 'Anyone with the link' — anonymous, no sign-in required; or (B) Entra B2B guest invitation — creates a lightweight guest account using the external user's existing email. As of July 1, 2025, OTP-based sharing is retired. Method B (Entra B2B) is the recommended and secure approach.",
+    solution:[
+      "METHOD A — 'Anyone with the Link' (Anonymous): Generates a link accessible without authentication. Anyone with the link can access the file and forward it freely. Suitable ONLY for non-sensitive content with an expiration date set.",
+      "METHOD B — Entra B2B Guest Invitation (RECOMMENDED): The external user is invited as a B2B guest. A lightweight guest account is created in your tenant's Entra ID. The user authenticates using their own email identity (Google, Hotmail, corporate email, etc.) with MFA enforced.",
+      "In Teams: Files tab → select file → '…' → Share → configure link type → send.",
+      "In SharePoint: navigate to file → Share → set link settings → send to external email.",
+      "After July 1 2025, for tenants with Entra B2B integration enabled, all new external sharing links are issued via Entra ID B2B Invitation Manager — not OTP."
+    ],
+    bestPractice:{
+      compliant:false,
+      summary:"Method A (Anyone links) violates best practices. Method B is the correct approach.",
+      points:[
+        "Always use 'Specific people' links (Method B / Entra B2B) for external sharing of files.",
+        "Set an expiration date on all sharing links — recommended maximum: 30 days.",
+        "Apply 'Block download' if the recipient only needs to view the file.",
+        "Apply a Sensitivity Label to the file to enforce protection policies.",
+        "Use DLP policies to prevent 'Anyone' links on content containing sensitive data types."
+      ],
+      violations:[
+        "Method A ('Anyone' links): links can be forwarded to unintended recipients with no audit trail.",
+        "Method A: bypasses folder-level permission settings — anyone with the link gets access regardless.",
+        "Method A: does not support access revocation for individual recipients.",
+        "OTP sharing (retired July 1, 2025): no longer supported for tenants with Entra B2B enabled."
+      ]
+    },
+    configuration:[
+      {step:1,title:"Admin: Enable External Sharing at Tenant Level",admin:true,items:[
+        "SharePoint Admin Center → Policies → Sharing.",
+        "Set SharePoint slider to 'New and existing guests' (Method B) or 'Anyone' (Method A).",
+        "Save."
+      ]},
+      {step:2,title:"Admin: Enable External Sharing at Site Level",admin:true,items:[
+        "SharePoint Admin Center → Active Sites → select the Teams site.",
+        "Click 'Sharing' tab → set to same or more restrictive than tenant level.",
+        "Save."
+      ]},
+      {step:3,title:"Admin: Configure Entra External Collaboration",admin:true,items:[
+        "Entra ID Admin Center → External Identities → External collaboration settings.",
+        "Set 'Guest invite settings' to 'Member users and users assigned to specific admin roles can invite guest users'.",
+        "Ensure the external user's domain is not on the deny list.",
+        "Save."
+      ]},
+      {step:4,title:"User: Share the File — Method B (Recommended)",admin:false,items:[
+        "In Teams → navigate to the channel → Files tab.",
+        "Hover over the file → click '…' → Share.",
+        "Click the link type dropdown → select 'Specific people'.",
+        "Enter the external user's email address.",
+        "Set permission: 'Can view' or 'Can edit' as required.",
+        "Set an expiration date (recommended: 30 days max).",
+        "Click 'Apply' → Send or Copy Link → send via email or Teams message.",
+        "The external user receives an invitation → authenticates via their own IDP (MFA required) → accesses the file."
+      ]},
+      {step:5,title:"User: Share the File — Method A (Anonymous — Use with Caution)",admin:false,items:[
+        "In Teams → Files tab → hover over the file → '…' → Share.",
+        "Select 'Anyone with the link'.",
+        "Set permission to 'Can view' (recommended — avoid edit for external).",
+        "Enable 'Block download' if view-only is sufficient.",
+        "Set expiration date (mandatory for compliance).",
+        "Copy link → send to external user.",
+        "Recipient clicks link → accesses file with no sign-in required."
+      ]}
+    ],
+    prerequisites:[
+      "SharePoint Administrator: to configure tenant-level and site-level external sharing settings.",
+      "M365 Global Administrator or User Administrator: to configure Entra External Identities settings.",
+      "Team Owner or Site Owner: to share files from the specific Teams/SharePoint site.",
+      "Licensing — External B2B guests do not require an M365 license for basic file access.",
+      "Entra ID P1 license: recommended to enforce Conditional Access and MFA for guest users.",
+      "Microsoft Purview (E3/E5 or add-on): required if DLP policies are to govern anonymous sharing."
+    ],
+    notice:{type:"warning",text:"⚠ As of July 1, 2025, Microsoft retired OTP-based sharing links (MC1089315) for tenants with Entra B2B integration enabled. Tenants provisioned after June 2023 have B2B enabled by default. All external sharing now uses Entra ID B2B Invitation Manager. Previously shared OTP links have stopped working — affected content must be reshared."}
+  },
+  {
+    id:3,title:"Share a Single Folder with External Users — No Entra ID Account",
+    subtitle:"Share a Teams folder with external users who have no Microsoft / Entra account",
+    audience:["IT Admin","Team Owner","End User"],product:["Teams","SharePoint"],
+    feasibility:"Yes*",icon:"📂",color:"#D83B01",
+    description:"A single folder in a Teams channel (SharePoint document library) can be shared with external users without an Entra ID account using the same two methods as file sharing: (A) 'Anyone with the link' (anonymous) or (B) Entra B2B guest invitation. Folder sharing carries additional risk: granting access to a folder exposes ALL its contents — current and future files. 'Anyone' links on folders override folder-level unique permissions. Method B is strongly recommended.",
+    solution:[
+      "Folder sharing follows the same SharePoint sharing model as file sharing, with elevated risk because the entire folder content is exposed.",
+      "METHOD A — 'Anyone with the Link': All contents of the folder are accessible — the link can be forwarded freely. 'Anyone' links BYPASS folder-level unique permissions.",
+      "METHOD B — Entra B2B Guest Invitation (RECOMMENDED): A 'Specific people' link invites the external user as a B2B guest. They authenticate via their own credentials. Access can be revoked at any time.",
+      "Best practice: create a dedicated 'External-Share' sub-folder and place only the files intended for external access inside it. Share only this sub-folder.",
+      "Never share a root channel folder or document library directly — always isolate external content."
+    ],
+    bestPractice:{
+      compliant:false,
+      summary:"Method A on folders is a significant security risk and violates best practices.",
+      points:[
+        "Always use 'Specific people' links (Method B / Entra B2B) for external folder sharing.",
+        "Create a dedicated sub-folder named e.g. 'External-Share' containing only files for external access.",
+        "Break inheritance on the external sub-folder and apply minimum required permissions.",
+        "Set a mandatory expiration date on all external sharing links.",
+        "Apply 'Block download' if recipients only need to view files.",
+        "Use DLP policies to block 'Anyone' links on libraries containing sensitive content types.",
+        "Periodically review external guest access (Access Reviews in Entra ID P2)."
+      ],
+      violations:[
+        "Method A on a folder: ALL current and future files added to the folder are exposed to anyone with the link.",
+        "Method A: 'Anyone' links bypass unique permissions set on sub-folders or items within the folder.",
+        "Method A: No audit trail — impossible to determine who accessed what file within the folder.",
+        "Sharing a root channel folder: exposes all channel files to the external recipient.",
+        "OTP sharing (retired July 1, 2025): no longer valid for tenants with Entra B2B enabled."
+      ]
+    },
+    configuration:[
+      {step:1,title:"Admin: Enable External Sharing (same as Use Case 2)",admin:true,items:[
+        "SharePoint Admin Center → Policies → Sharing → set to 'New and existing guests' or 'Anyone'.",
+        "SharePoint Admin Center → Active Sites → select site → Sharing tab → configure site-level sharing.",
+        "Entra ID Admin Center → External Identities → External collaboration settings → confirm guest invite settings.",
+        "(Reference: same admin steps as Use Case 2, Steps 1–3.)"
+      ]},
+      {step:2,title:"Create a Dedicated External Sub-Folder (Recommended)",admin:false,items:[
+        "In Teams → Files tab → navigate to the relevant channel.",
+        "Create a new folder named 'External-Share' (or relevant project name).",
+        "Move or copy only the files intended for external access into this folder.",
+        "This isolates external content from the rest of the channel's documents."
+      ]},
+      {step:3,title:"User: Share the Folder — Method B (Recommended)",admin:false,items:[
+        "In Teams → Files tab → hover over the folder → '…' → Share.",
+        "Click the link type dropdown → select 'Specific people'.",
+        "Enter the external user's email address(es).",
+        "Set permission: 'Can view' or 'Can edit' as required.",
+        "Set an expiration date (recommended: 30 days max).",
+        "Click 'Apply' → Send or Copy Link → send to external user.",
+        "External user receives invitation → authenticates via Entra B2B (their own IDP + MFA) → lands on the folder in SharePoint.",
+        "They see only that folder's contents — nothing else in the site."
+      ]},
+      {step:4,title:"User: Share the Folder — Method A (Anonymous — Use with Extreme Caution)",admin:false,items:[
+        "In Teams → Files tab → hover over the folder → '…' → Share.",
+        "Select 'Anyone with the link'.",
+        "Set to 'Can view' + enable 'Block download' (mandatory).",
+        "Set expiration date (mandatory — recommended: 7–14 days maximum for folders).",
+        "Copy link → send to external user.",
+        "WARNING: All files in the folder, including any added after link creation, are accessible."
+      ]},
+      {step:5,title:"Revoke Access / Manage Guest Access",admin:false,items:[
+        "In SharePoint → navigate to the folder → '…' → Manage Access.",
+        "To revoke a specific person: find their name → click '…' → Remove access.",
+        "To revoke an 'Anyone' link: in Manage Access → Links → delete the link.",
+        "For B2B guests no longer needed: remove from site in Manage Access AND remove guest account from Entra ID."
+      ]}
+    ],
+    prerequisites:[
+      "SharePoint Administrator: to configure tenant-level and site-level external sharing settings.",
+      "M365 Global Administrator or User Administrator: to configure Entra External Identities settings.",
+      "Team Owner or Site Owner: to share folders from the specific Teams/SharePoint site.",
+      "Licensing — External B2B guests do not require an M365 license for basic folder/file access.",
+      "Entra ID P1 license: strongly recommended to enforce Conditional Access and MFA for guest users.",
+      "Entra ID P2 license: required for Access Reviews (periodic guest access review automation).",
+      "Microsoft Purview (E3/E5 or add-on): required for DLP policies governing external folder sharing."
+    ],
+    notice:{type:"warning",text:"⚠ As of July 1, 2025, Microsoft retired OTP-based sharing links (MC1089315) for tenants with Entra B2B integration enabled (default for tenants provisioned after June 2023). Additionally: 'Anyone' links on folders override folder-level unique permissions — a critical security consideration."}
+  }
+];
+
+const TABS=["Description","Solution","Best Practice","Configuration","Prerequisites"];
+
+function Badge({label,color}){
+  return <span style={{display:"inline-block",padding:"2px 9px",borderRadius:12,fontSize:11,fontWeight:600,background:color+"22",color,border:`1px solid ${color}44`,marginRight:5,marginBottom:3}}>{label}</span>;
+}
+
+function FeasibilityBadge({value}){
+  const ok=value==="Yes",partial=value==="Yes*";
+  const bg=ok?"#E6F4EA":partial?"#FFF4CE":"#FDECEA";
+  const col=ok?SUCCESS:partial?"#7B5800":WARN;
+  const label=ok?"✓ Feasible":partial?"✓ Feasible (conditions apply)":"✗ Not Feasible";
+  return <span style={{display:"inline-block",padding:"3px 12px",borderRadius:14,fontSize:12,fontWeight:700,background:bg,color:col}}>{label}</span>;
+}
+
+function StepCard({step,title,admin,items,defaultOpen}){
+  const [open,setOpen]=useState(defaultOpen||false);
+  return(
+    <div style={{marginBottom:10,border:"1px solid #E2E8F0",borderRadius:8,overflow:"hidden"}}>
+      <div onClick={()=>setOpen(!open)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:open?"#EBF4FB":"#F8FAFC",cursor:"pointer",borderBottom:open?"1px solid #DBEAFE":"none"}}>
+        <div style={{width:26,height:26,borderRadius:"50%",background:ACCENT,color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{step}</div>
+        <div style={{flex:1,fontSize:13,fontWeight:600,color:DARK}}>{title}</div>
+        {admin&&<span style={{padding:"1px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#EDE9FE",color:"#6B21A8",border:"1px solid #C4B5FD"}}>Admin</span>}
+        <span style={{fontSize:14,color:"#888"}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{padding:"12px 16px 14px 52px"}}>
+          <ol>{items.map((item,i)=><li key={i} style={{fontSize:13,color:"#374151",marginBottom:5,lineHeight:1.55}}>{item}</li>)}</ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UCCard({uc,isSelected,onClick}){
+  return(
+    <div onClick={onClick} style={{cursor:"pointer",padding:"14px 16px",borderRadius:10,background:isSelected?uc.color:CARD,color:isSelected?"#fff":DARK,border:`2px solid ${isSelected?uc.color:"#E2E8F0"}`,marginBottom:10,transition:"all 0.15s",boxShadow:isSelected?`0 4px 16px ${uc.color}44`:"0 1px 4px rgba(0,0,0,0.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+        <span style={{fontSize:20}}>{uc.icon}</span>
+        <div>
+          <div style={{fontSize:10,fontWeight:700,opacity:0.6,letterSpacing:1,textTransform:"uppercase"}}>Use Case {uc.id}</div>
+          <div style={{fontSize:13,fontWeight:700,lineHeight:1.3}}>{uc.title}</div>
+        </div>
+      </div>
+      <div style={{fontSize:11,opacity:0.7,marginBottom:7}}>{uc.subtitle}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+        {uc.audience.map(a=><span key={a} style={{padding:"1px 7px",borderRadius:10,fontSize:10,fontWeight:600,background:isSelected?"rgba(255,255,255,0.25)":AUDIENCE_COLORS[a]+"18",color:isSelected?"#fff":AUDIENCE_COLORS[a],border:`1px solid ${isSelected?"rgba(255,255,255,0.35)":AUDIENCE_COLORS[a]+"50"}`}}>{a}</span>)}
+        {uc.product.map(p=><span key={p} style={{padding:"1px 7px",borderRadius:10,fontSize:10,fontWeight:600,background:isSelected?"rgba(255,255,255,0.2)":"#F1F5F9",color:isSelected?"#fff":"#475569",border:`1px solid ${isSelected?"rgba(255,255,255,0.3)":"#CBD5E1"}`}}>{p}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function DetailPanel({uc}){
+  const [tab,setTab]=useState("Description");
+  return(
+    <div style={{background:CARD,borderRadius:12,boxShadow:"0 2px 12px rgba(0,0,0,0.08)",overflow:"hidden"}}>
+      <div style={{background:`linear-gradient(135deg,${uc.color} 0%,${uc.color}CC 100%)`,padding:"22px 28px",color:"#fff"}}>
+        <div style={{fontSize:11,fontWeight:600,opacity:0.8,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Use Case {uc.id}</div>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:5}}>{uc.icon} {uc.title}</div>
+        <div style={{fontSize:13,opacity:0.85,marginBottom:12}}>{uc.subtitle}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+          <FeasibilityBadge value={uc.feasibility}/>
+          {uc.audience.map(a=><Badge key={a} label={a} color="#fff"/>)}
+          {uc.product.map(p=><Badge key={p} label={p} color="#fff"/>)}
+        </div>
+      </div>
+      {uc.notice&&<div style={{background:"#FFF8E1",borderLeft:"4px solid #F9A825",padding:"10px 20px",fontSize:12,color:"#7B5800"}}>{uc.notice.text}</div>}
+      <div style={{display:"flex",borderBottom:"2px solid #E2E8F0",background:"#F8FAFC",overflowX:"auto"}}>
+        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"11px 16px",fontSize:13,fontWeight:600,border:"none",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",color:tab===t?uc.color:"#64748B",borderBottom:tab===t?`3px solid ${uc.color}`:"3px solid transparent",marginBottom:-2}}>{t}</button>)}
+      </div>
+      <div style={{padding:"22px 24px",minHeight:320}}>
+        {tab==="Description"&&<div style={{fontSize:14,color:"#374151",lineHeight:1.75,background:"#F8FAFC",padding:"16px 18px",borderRadius:8,borderLeft:`4px solid ${uc.color}`}}>{uc.description}</div>}
+        {tab==="Solution"&&<div>
+          <div style={{fontSize:12,fontWeight:700,color:DARK,marginBottom:14,textTransform:"uppercase",letterSpacing:0.8}}>Recommended Solution</div>
+          {uc.solution.map((s,i)=><div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:uc.color+"20",color:uc.color,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
+            <div style={{fontSize:13,color:"#374151",lineHeight:1.6}}>{s}</div>
+          </div>)}
+        </div>}
+        {tab==="Best Practice"&&<div>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:8,marginBottom:18,background:uc.bestPractice.compliant?"#E6F4EA":"#FFF4CE",border:`1px solid ${uc.bestPractice.compliant?"#A8D5A2":"#F9A825"}`}}>
+            <span style={{fontSize:20}}>{uc.bestPractice.compliant?"✅":"⚠️"}</span>
+            <span style={{fontSize:13,fontWeight:600,color:uc.bestPractice.compliant?SUCCESS:"#7B5800"}}>{uc.bestPractice.summary}</span>
+          </div>
+          {uc.bestPractice.points.length>0&&<div style={{marginBottom:18}}>
+            <div style={{fontSize:11,fontWeight:700,color:SUCCESS,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>✓ Best Practices to Follow</div>
+            {uc.bestPractice.points.map((p,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}><span style={{color:SUCCESS,fontWeight:700,fontSize:14,flexShrink:0}}>✓</span><span style={{fontSize:13,color:"#374151",lineHeight:1.55}}>{p}</span></div>)}
+          </div>}
+          {uc.bestPractice.violations.length>0&&<div>
+            <div style={{fontSize:11,fontWeight:700,color:WARN,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>✗ Best Practice Violations to Avoid</div>
+            {uc.bestPractice.violations.map((v,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}><span style={{color:WARN,fontWeight:700,fontSize:14,flexShrink:0}}>✗</span><span style={{fontSize:13,color:"#374151",lineHeight:1.55}}>{v}</span></div>)}
+          </div>}
+        </div>}
+        {tab==="Configuration"&&<div>
+          <div style={{fontSize:12,fontWeight:700,color:DARK,marginBottom:14,textTransform:"uppercase",letterSpacing:0.8}}>Step-by-Step Configuration</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"8px 12px",background:"#F1F5F9",borderRadius:6,fontSize:12,color:"#64748B"}}>
+            <span style={{padding:"1px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#EDE9FE",color:"#6B21A8",border:"1px solid #C4B5FD"}}>Admin</span> = Requires administrator access
+          </div>
+          {uc.configuration.map((cfg,i)=><StepCard key={i} {...cfg} defaultOpen={i===0}/>)}
+        </div>}
+        {tab==="Prerequisites"&&<div>
+          <div style={{fontSize:12,fontWeight:700,color:DARK,marginBottom:14,textTransform:"uppercase",letterSpacing:0.8}}>Prerequisites & Required Permissions</div>
+          {uc.prerequisites.map((p,i)=><div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 14px",background:"#F8FAFC",borderRadius:8,border:"1px solid #E2E8F0",marginBottom:8}}>
+            <span style={{fontSize:16,flexShrink:0}}>🔑</span>
+            <span style={{fontSize:13,color:"#374151",lineHeight:1.55}}>{p}</span>
+          </div>)}
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [sel,setSel]=useState(0);
+  const [search,setSearch]=useState("");
+  const [audF,setAudF]=useState("All");
+  const [prodF,setProdF]=useState("All");
+  const audiences=["All","IT Admin","Team Owner","End User"];
+  const products=["All","Teams","SharePoint"];
+  const filtered=useMemo(()=>useCases.filter(uc=>{
+    const ms=search===""||uc.title.toLowerCase().includes(search.toLowerCase())||uc.subtitle.toLowerCase().includes(search.toLowerCase())||uc.description.toLowerCase().includes(search.toLowerCase());
+    return ms&&(audF==="All"||uc.audience.includes(audF))&&(prodF==="All"||uc.product.includes(prodF));
+  }),[search,audF,prodF]);
+
+  const displayUC=filtered[sel]||filtered[0]||useCases[0];
+
+  return(
+    <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",background:"#F3F6FB",minHeight:"100vh"}}>
+      <div style={{background:DARK,padding:"0 20px",display:"flex",alignItems:"center",height:52,borderBottom:"3px solid "+ACCENT}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+          <span style={{fontSize:22}}>🏢</span>
+          <div>
+            <div style={{color:"#fff",fontSize:14,fontWeight:700,lineHeight:1.2}}>MS Teams & SharePoint</div>
+            <div style={{color:"#A8C8F0",fontSize:10,letterSpacing:0.5}}>Sharing Use Cases — Guidance Portal</div>
+          </div>
+        </div>
+        <div style={{color:"#A8C8F0",fontSize:11,textAlign:"right"}}>
+          <div>{useCases.length} Use Cases</div>
+          <div style={{opacity:0.7}}>Updated Feb 2026</div>
+        </div>
+      </div>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"18px 14px",display:"flex",gap:18,flexWrap:"wrap"}}>
+        <div style={{width:280,flexShrink:0}}>
+          <div style={{background:CARD,borderRadius:10,padding:"14px",marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}>
+            <input type="text" placeholder="🔍  Search use cases..." value={search} onChange={e=>{setSearch(e.target.value);setSel(0);}} style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1.5px solid #CBD5E1",fontSize:13,outline:"none",marginBottom:10,fontFamily:"inherit",color:"#1A1A1A"}}/>
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",marginBottom:5,letterSpacing:0.7}}>Audience</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {audiences.map(a=><button key={a} onClick={()=>{setAudF(a);setSel(0);}} style={{padding:"3px 9px",borderRadius:12,fontSize:11,fontWeight:600,cursor:"pointer",background:audF===a?ACCENT:"#F1F5F9",color:audF===a?"#fff":"#475569",border:`1px solid ${audF===a?ACCENT:"#CBD5E1"}`}}>{a}</button>)}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",marginBottom:5,letterSpacing:0.7}}>Product</div>
+              <div style={{display:"flex",gap:4}}>
+                {products.map(p=><button key={p} onClick={()=>{setProdF(p);setSel(0);}} style={{padding:"3px 9px",borderRadius:12,fontSize:11,fontWeight:600,cursor:"pointer",background:prodF===p?ACCENT:"#F1F5F9",color:prodF===p?"#fff":"#475569",border:`1px solid ${prodF===p?ACCENT:"#CBD5E1"}`}}>{p}</button>)}
+              </div>
+            </div>
+          </div>
+          {filtered.length===0?<div style={{textAlign:"center",color:"#94A3B8",fontSize:13,padding:20}}>No matching use cases found.</div>:filtered.map((uc,i)=><UCCard key={uc.id} uc={uc} isSelected={i===sel} onClick={()=>setSel(i)}/>)}
+          <div style={{background:CARD,borderRadius:10,padding:"12px 14px",marginTop:6,boxShadow:"0 1px 6px rgba(0,0,0,0.07)"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:0.7,marginBottom:8}}>Legend</div>
+            {Object.entries(AUDIENCE_COLORS).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}><div style={{width:10,height:10,borderRadius:"50%",background:v,flexShrink:0}}/><span style={{fontSize:11,color:"#475569"}}>{k}</span></div>)}
+            <div style={{marginTop:6,fontSize:11,color:"#94A3B8"}}>* = Conditions apply</div>
+          </div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          {filtered.length>0?<DetailPanel uc={displayUC}/>:<div style={{background:CARD,borderRadius:12,padding:48,textAlign:"center",color:"#94A3B8"}}><div style={{fontSize:36,marginBottom:10}}>🔍</div><div style={{fontSize:15,fontWeight:600}}>No results found</div><div style={{fontSize:13,marginTop:5}}>Try adjusting your search or filters.</div></div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
